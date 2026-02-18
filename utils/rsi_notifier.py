@@ -4,7 +4,7 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from utils.rsi import rsi_multi
+from utils.rsi import rsi, rsi_multi
 from utils.telegram import format_rsi_alert, send_message
 
 if TYPE_CHECKING:
@@ -29,13 +29,11 @@ def _is_oversold(interval: str, r6: float, r12: float) -> bool:
 
 
 def _is_overbought(interval: str, r6: float, r12: float) -> bool:
-    """Per-interval overbought: M1 RSI6>80 & RSI12>70, M5 RSI6>70, M15 RSI6>60."""
+    """Per-interval overbought: M1 RSI6>80 & RSI12>70. M5/M15: first gate only (r6>70); 1m confirmation done in _check_and_notify."""
     if interval == "1m":
         return r6 > 80 and r12 > 70
-    if interval == "5m":
+    if interval in ("5m", "15m"):
         return r6 > 70
-    if interval == "15m":
-        return r6 > 60
     return False
 
 
@@ -75,6 +73,15 @@ def _check_and_notify(
         send_message(bot_token, chat_id, text)
         logger.info("RSI Oversold %s %s RSI6=%.1f RSI12=%.1f", symbol, interval, r6, r12)
     elif _is_overbought(interval, r6, r12):
+        # For 5m and 15m: only notify if last closed 1m candle also has RSI > 80
+        if interval in ("5m", "15m"):
+            closes_1m = _closes_from_klines(exchange, symbol, "1m")
+            if not closes_1m:
+                return
+            rsi6_1m = rsi(closes_1m, 6)
+            if rsi6_1m is None or rsi6_1m <= 80:
+                return
+            logger.info("RSI 1m confirm %s: RSI6=%.1f", symbol, rsi6_1m)
         text = format_rsi_alert(
             symbol, f"M{interval.replace('m', '')}", "Overbought", r6, r12, r24, close_time
         )
@@ -92,7 +99,7 @@ def run_rsi_notifier(
     """
     Run forever: on each closed candle for M1/M5/M15 per symbol, compute RSI(6/12/24).
     Oversold: M1 RSI6<20 & RSI12<30, M5 RSI6<30 & RSI12<40, M15 RSI6<40.
-    Overbought: M1 RSI6>80 & RSI12>70, M5 RSI6>70, M15 RSI6>60.
+    Overbought: M1 RSI6>80 & RSI12>70. M5/M15: notify only if (HTF RSI>70) and (last closed 1m RSI>80).
     Only one notification per closed candle (no repeats for the same candle).
     """
     if not bot_token or not chat_id:
