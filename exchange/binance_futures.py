@@ -15,6 +15,10 @@ class BinanceFutures:
         """Fetch klines from Binance API (symbol, interval, limit). Same as GET .../klines?symbol=...&interval=...&limit=..."""
         return self.client.futures_klines(symbol=symbol, interval=interval, limit=limit)
 
+    def get_spot_klines(self, symbol: str, interval: str, limit: int = 500):
+        """Fetch SPOT klines (GET /api/v3/klines) with symbol, interval, and limit."""
+        return self.client.get_klines(symbol=symbol, interval=interval, limit=limit)
+
     def get_position_amt(self, symbol: str) -> float:
         positions = self.client.futures_position_information(symbol=symbol)
         for pos in positions:

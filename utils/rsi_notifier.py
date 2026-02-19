@@ -44,9 +44,23 @@ def _is_overbought(interval: str, r6: float, r12: float) -> bool:
 def _get_klines_from_binance(
     exchange: "BinanceFutures", symbol: str, interval: str
 ) -> list[list] | None:
-    """Step 1: Fetch klines from Binance API (symbol, interval, limit=500). Returns raw klines or None."""
-    raw = exchange.get_klines(symbol, interval, limit=RSI_KLINES_LIMIT)
+    """
+    Step 1: Fetch klines from Binance API (symbol, interval, limit=500).
+    Uses spot klines endpoint (/api/v3/klines) first per deployment requirement.
+    Falls back to futures klines if spot is unavailable for a symbol.
+    """
+    raw: list[list] | None = None
+    try:
+        raw = exchange.get_spot_klines(symbol, interval, limit=RSI_KLINES_LIMIT)
+    except Exception as e:
+        logger.warning("RSI spot klines failed %s %s: %s", symbol, interval, e)
+        try:
+            raw = exchange.get_klines(symbol, interval, limit=RSI_KLINES_LIMIT)
+        except Exception as fe:
+            logger.warning("RSI futures klines failed %s %s: %s", symbol, interval, fe)
+            return None
     if not raw or len(raw) < 25:
+        logger.warning("RSI insufficient klines %s %s: got=%s", symbol, interval, len(raw) if raw else 0)
         return None
     return raw
 
@@ -80,6 +94,7 @@ def _check_and_notify(
     r24 = values.get(24)
     if r6 is None or r12 is None:
         return
+    logger.info("RSI values %s %s -> RSI6=%.1f RSI12=%.1f RSI24=%s", symbol, interval, r6, r12, f"{r24:.1f}" if r24 is not None else "N/A")
 
     if _is_oversold(interval, r6, r12):
         text = format_rsi_alert(
