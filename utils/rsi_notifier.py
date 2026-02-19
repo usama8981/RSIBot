@@ -12,7 +12,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-RSI_KLINES_LIMIT = 50
+# Step 1: Get kline data from Binance API (symbol, interval, limit).
+# Equivalent to: GET .../klines?symbol=SYMBOL&interval=1m|5m|15m&limit=500
+# Kline format: [open_time, open, high, low, close, volume, close_time, ...]; we use close (index 4).
+# RSI is not in the API response — we compute RSI(6/12/24) from these close prices only.
+RSI_KLINES_LIMIT = 500
 RSI_INTERVALS = ("1m", "5m", "15m")
 POLL_SECONDS = 10
 
@@ -37,9 +41,20 @@ def _is_overbought(interval: str, r6: float, r12: float) -> bool:
     return False
 
 
-def _closes_from_klines(exchange: "BinanceFutures", symbol: str, interval: str) -> list[float] | None:
+def _get_klines_from_binance(
+    exchange: "BinanceFutures", symbol: str, interval: str
+) -> list[list] | None:
+    """Step 1: Fetch klines from Binance API (symbol, interval, limit=500). Returns raw klines or None."""
     raw = exchange.get_klines(symbol, interval, limit=RSI_KLINES_LIMIT)
     if not raw or len(raw) < 25:
+        return None
+    return raw
+
+
+def _closes_from_klines(exchange: "BinanceFutures", symbol: str, interval: str) -> list[float] | None:
+    """Get close prices from Binance klines (each kline[4] is close)."""
+    raw = _get_klines_from_binance(exchange, symbol, interval)
+    if not raw:
         return None
     return [float(k[4]) for k in raw]
 

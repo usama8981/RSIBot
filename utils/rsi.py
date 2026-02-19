@@ -1,7 +1,8 @@
-"""RSI (Relative Strength Index) using Wilder smoothing — matches Binance/TradingView.
+"""RSI from Binance kline data.
 
-Binance API does not provide RSI; it only returns OHLCV klines. This module computes
-RSI from close prices using the standard Wilder method so values match chart platforms.
+Data source: close prices from Binance klines API (GET klines?symbol=...&interval=...&limit=500).
+Each kline gives open, high, low, close (we use close only). RSI is not returned by Binance —
+we compute RSI(6), RSI(12), RSI(24) from the fetched close series using Wilder smoothing.
 """
 
 
