@@ -12,6 +12,7 @@ class BinanceFutures:
         self.client.futures_change_leverage(symbol=symbol, leverage=leverage)
 
     def get_klines(self, symbol: str, interval: str, limit: int = 2):
+        """Fetch klines from Binance API (symbol, interval, limit). Same as GET .../klines?symbol=...&interval=...&limit=..."""
         return self.client.futures_klines(symbol=symbol, interval=interval, limit=limit)
 
     def get_position_amt(self, symbol: str) -> float:
